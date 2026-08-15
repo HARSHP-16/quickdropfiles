@@ -39,7 +39,7 @@ For local development, SQLite and `data/uploads` replace the cloud services. Do 
 3. Deploy `functions/cleanup` as a separate Function App with the same database/storage configuration.
 4. Use managed identity/RBAC for Blob access where your hosting setup permits it; never commit credentials. Enable HTTPS-only on App Service.
 
-The current Blob adapter uses a connection string for simple setup. Migrating it to `DefaultAzureCredential` is the recommended production hardening step when managed identity is enabled.
+The Azure Blob adapter uses `DefaultAzureCredential`: Azure CLI/developer credentials work locally, while App Service uses its system-assigned managed identity. Set only the non-secret Azure storage account and container names in App Service configuration.
 
 ## API
 

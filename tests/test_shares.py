@@ -1,7 +1,9 @@
 import io
 from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 from backend.extensions import db
 from backend.models import Share
+from backend.services.storage import AzureBlobStorage, create_storage
 
 def test_text_share_lookup_and_consume(client):
     response = client.post('/api/text', json={'content':'hello QuickDrop', 'delete_after_download': True})
@@ -33,3 +35,27 @@ def test_empty_and_large_text_rejected(client, app):
     assert client.post('/api/text', json={'content':'   '}).status_code == 400
     app.config['MAX_TEXT_SIZE_MB'] = 0
     assert client.post('/api/text', json={'content':'x'}).status_code == 413
+
+
+def test_azure_storage_uses_managed_identity_and_private_blob_endpoint():
+    with patch("azure.identity.DefaultAzureCredential") as credential, \
+         patch("azure.storage.blob.BlobServiceClient") as client:
+        storage = AzureBlobStorage("quickdropstoragehp", "quickdrop-files")
+
+    credential.assert_called_once_with()
+    client.assert_called_once_with(
+        account_url="https://quickdropstoragehp.blob.core.windows.net",
+        credential=credential.return_value,
+    )
+    client.return_value.get_container_client.assert_called_once_with("quickdrop-files")
+    assert storage.container is client.return_value.get_container_client.return_value
+
+
+def test_azure_backend_requires_account_name():
+    try:
+        create_storage({"STORAGE_BACKEND": "azure", "AZURE_STORAGE_ACCOUNT_NAME": None,
+                        "AZURE_STORAGE_CONTAINER": "quickdrop-files"})
+    except RuntimeError as exc:
+        assert "AZURE_STORAGE_ACCOUNT_NAME" in str(exc)
+    else:
+        raise AssertionError("Azure backend must require an account name")

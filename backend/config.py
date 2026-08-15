@@ -17,6 +17,6 @@ class Config:
     RATELIMIT_STORAGE_URI = os.getenv("RATELIMIT_STORAGE_URI", "memory://")
     STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "local")
     UPLOAD_FOLDER = Path(os.getenv("UPLOAD_FOLDER", str(BASE_DIR / "data" / "uploads")))
-    AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+    AZURE_STORAGE_ACCOUNT_NAME = os.getenv("AZURE_STORAGE_ACCOUNT_NAME")
     AZURE_STORAGE_CONTAINER = os.getenv("AZURE_STORAGE_CONTAINER", "quickdrop")
     PERMANENT_SESSION_LIFETIME = timedelta(hours=1)

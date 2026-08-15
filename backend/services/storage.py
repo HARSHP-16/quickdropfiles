@@ -1,7 +1,10 @@
 import io
+import logging
 import os
 from pathlib import Path
 from uuid import uuid4
+
+logger = logging.getLogger(__name__)
 
 
 class LocalStorage:
@@ -26,16 +29,21 @@ class LocalStorage:
 
 
 class AzureBlobStorage:
-    def __init__(self, connection_string, container):
+    """Private Azure Blob Storage authenticated through DefaultAzureCredential."""
+
+    def __init__(self, account_name, container):
+        from azure.identity import DefaultAzureCredential
         from azure.storage.blob import BlobServiceClient
-        self.container = BlobServiceClient.from_connection_string(connection_string).get_container_client(container)
-        try:
-            self.container.create_container()
-        except Exception:
-            pass
+
+        account_url = f"https://{account_name}.blob.core.windows.net"
+        self.container = BlobServiceClient(
+            account_url=account_url,
+            credential=DefaultAzureCredential(),
+        ).get_container_client(container)
 
     def save(self, file_storage):
-        name = uuid4().hex
+        # Blob names are generated internally; no user-controlled filename is used as a path.
+        name = f"uploads/{uuid4().hex}{Path(file_storage.filename or '').suffix.lower()}"
         self.container.upload_blob(name, file_storage.stream, overwrite=False)
         return name
 
@@ -43,12 +51,19 @@ class AzureBlobStorage:
         return io.BytesIO(self.container.download_blob(blob_name).readall())
 
     def delete(self, blob_name):
-        self.container.delete_blob(blob_name, delete_snapshots="include")
+        from azure.core.exceptions import ResourceNotFoundError
+
+        try:
+            self.container.delete_blob(blob_name, delete_snapshots="include")
+        except ResourceNotFoundError:
+            # Deletion is idempotent, matching the existing local backend semantics.
+            logger.info("Blob %s was already absent during cleanup", blob_name)
 
 
 def create_storage(config):
     if config["STORAGE_BACKEND"].lower() == "azure":
-        if not config.get("AZURE_STORAGE_CONNECTION_STRING"):
-            raise RuntimeError("Azure storage selected but AZURE_STORAGE_CONNECTION_STRING is not configured")
-        return AzureBlobStorage(config["AZURE_STORAGE_CONNECTION_STRING"], config["AZURE_STORAGE_CONTAINER"])
+        account_name = config.get("AZURE_STORAGE_ACCOUNT_NAME")
+        if not account_name:
+            raise RuntimeError("Azure storage selected but AZURE_STORAGE_ACCOUNT_NAME is not configured")
+        return AzureBlobStorage(account_name, config["AZURE_STORAGE_CONTAINER"])
     return LocalStorage(config["UPLOAD_FOLDER"])
