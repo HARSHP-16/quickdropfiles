@@ -1,0 +1,3 @@
+function formatBytes(bytes){if(bytes===0)return"0 B";const u=["B","KB","MB","GB"],i=Math.floor(Math.log(bytes)/Math.log(1024));return `${(bytes/1024**i).toFixed(i?1:0)} ${u[i]}`}
+function startCountdown(expiresAt, element){const tick=()=>{const seconds=Math.max(0,Math.ceil((new Date(expiresAt)-Date.now())/1000));const h=Math.floor(seconds/3600),m=Math.floor(seconds%3600/60),s=seconds%60;element.textContent=`${h?`${h}:`:""}${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;if(seconds<=0){clearInterval(id);location.href="/expired"}};tick();const id=setInterval(tick,1000);return id}
+async function copyText(text){await navigator.clipboard.writeText(text)}
