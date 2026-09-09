@@ -12,8 +12,10 @@ api = Blueprint("api", __name__, url_prefix="/api")
 
 
 def _share_data(share, include_text=True):
+    frontend_url = current_app.config.get("PUBLIC_FRONTEND_URL", "").rstrip("/")
+    share_url = f"{frontend_url}/s/{share.token}" if frontend_url else f"/s/{share.token}"
     return {
-        "token": share.token, "code": share.code, "url": f"/s/{share.token}",
+        "token": share.token, "code": share.code, "url": share_url,
         "share_type": share.share_type, "created_at": share.created_at.replace(tzinfo=timezone.utc).isoformat(),
         "expires_at": share.expires_at.replace(tzinfo=timezone.utc).isoformat(), "download_count": share.download_count,
         "delete_after_download": share.delete_after_download,
@@ -92,7 +94,9 @@ def qr(token):
         return jsonify(error=str(exc)), 410
     import qrcode
     import qrcode.image.svg
-    image = qrcode.make(request.url_root.rstrip("/") + f"/s/{token.upper()}", image_factory=qrcode.image.svg.SvgPathImage)
+    frontend_url = current_app.config.get("PUBLIC_FRONTEND_URL", "").rstrip("/")
+    base_url = frontend_url if frontend_url else request.url_root.rstrip("/")
+    image = qrcode.make(f"{base_url}/s/{token.upper()}", image_factory=qrcode.image.svg.SvgPathImage)
     output = __import__('io').BytesIO()
     image.save(output)
     return Response(output.getvalue(), mimetype="image/svg+xml")
@@ -104,7 +108,9 @@ def lookup(code):
     normalized = code.replace("-", "").upper()
     try:
         share = get_active_share(normalized)
-        return jsonify(token=share.token, url=f"/s/{share.token}")
+        frontend_url = current_app.config.get("PUBLIC_FRONTEND_URL", "").rstrip("/")
+        share_url = f"{frontend_url}/s/{share.token}" if frontend_url else f"/s/{share.token}"
+        return jsonify(token=share.token, url=share_url)
     except ShareUnavailable:
         return jsonify(error="Invalid or expired share code."), 404
 

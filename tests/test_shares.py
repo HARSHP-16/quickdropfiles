@@ -59,3 +59,41 @@ def test_azure_backend_requires_account_name():
         assert "AZURE_STORAGE_ACCOUNT_NAME" in str(exc)
     else:
         raise AssertionError("Azure backend must require an account name")
+
+
+def test_public_frontend_url_and_qr(client, app):
+    app.config["PUBLIC_FRONTEND_URL"] = "https://quickdropfiles.vercel.app"
+    response = client.post('/api/text', json={'content': 'test frontend url'})
+    assert response.status_code == 201
+    data = response.json
+    assert data['url'] == f"https://quickdropfiles.vercel.app/s/{data['token']}"
+    assert "azurewebsites.net" not in data['url']
+
+    lookup_res = client.get('/api/lookup/' + data['code'])
+    assert lookup_res.status_code == 200
+    assert lookup_res.json['url'] == f"https://quickdropfiles.vercel.app/s/{data['token']}"
+
+    qr_res = client.get('/api/qr/' + data['token'])
+    assert qr_res.status_code == 200
+    assert qr_res.mimetype == "image/svg+xml"
+
+
+def test_cors_configuration(client):
+    # Allowed origin
+    res = client.get('/api/lookup/test', headers={'Origin': 'https://quickdropfiles.vercel.app'})
+    assert res.headers.get('Access-Control-Allow-Origin') == 'https://quickdropfiles.vercel.app'
+    assert 'Access-Control-Allow-Credentials' not in res.headers
+
+    # Disallowed origin
+    res_unauth = client.get('/api/lookup/test', headers={'Origin': 'https://malicious-site.com'})
+    assert res_unauth.headers.get('Access-Control-Allow-Origin') is None
+
+    # Preflight OPTIONS
+    res_options = client.options('/api/share/test', headers={
+        'Origin': 'https://quickdropfiles.vercel.app',
+        'Access-Control-Request-Method': 'DELETE',
+        'Access-Control-Request-Headers': 'X-Delete-Secret,Content-Type'
+    })
+    assert res_options.status_code == 200
+    assert res_options.headers.get('Access-Control-Allow-Origin') == 'https://quickdropfiles.vercel.app'
+    assert 'X-Delete-Secret' in res_options.headers.get('Access-Control-Allow-Headers', '')

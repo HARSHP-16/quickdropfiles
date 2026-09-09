@@ -3,7 +3,7 @@ from pathlib import Path
 from flask import Flask, jsonify
 from werkzeug.exceptions import RequestEntityTooLarge
 from backend.config import Config
-from backend.extensions import db, limiter
+from backend.extensions import cors, db, limiter
 from backend.routes.api import api
 from backend.routes.pages import pages
 from backend.services.storage import create_storage
@@ -18,6 +18,10 @@ def create_app(test_config=None):
     Path(app.config["UPLOAD_FOLDER"]).mkdir(parents=True, exist_ok=True)
     db.init_app(app)
     limiter.init_app(app)
+    cors_origins = app.config.get("CORS_ORIGINS", ["https://quickdropfiles.vercel.app"])
+    if isinstance(cors_origins, str):
+        cors_origins = [o.strip() for o in cors_origins.split(",") if o.strip()]
+    cors.init_app(app, resources={r"/api/*": {"origins": cors_origins}})
     app.extensions["storage"] = create_storage(app.config)
     app.register_blueprint(api)
     app.register_blueprint(pages)

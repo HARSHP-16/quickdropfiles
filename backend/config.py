@@ -20,3 +20,9 @@ class Config:
     AZURE_STORAGE_ACCOUNT_NAME = os.getenv("AZURE_STORAGE_ACCOUNT_NAME")
     AZURE_STORAGE_CONTAINER = os.getenv("AZURE_STORAGE_CONTAINER", "quickdrop")
     PERMANENT_SESSION_LIFETIME = timedelta(hours=1)
+    PUBLIC_FRONTEND_URL = os.getenv("PUBLIC_FRONTEND_URL", "https://quickdropfiles.vercel.app").rstrip("/")
+    CORS_ORIGINS = [
+        origin.strip()
+        for origin in os.getenv("CORS_ORIGINS", PUBLIC_FRONTEND_URL or "https://quickdropfiles.vercel.app").split(",")
+        if origin.strip()
+    ]
