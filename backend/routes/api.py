@@ -1,7 +1,8 @@
 import hashlib
+import hmac
 import mimetypes
+import re
 from datetime import timezone
-from pathlib import Path
 from flask import Blueprint, Response, current_app, jsonify, request, send_file
 from werkzeug.utils import secure_filename
 from backend.extensions import db, limiter
@@ -9,6 +10,21 @@ from backend.models import StoredFile
 from backend.services.share_service import ShareUnavailable, create_share, get_active_share, remove_share
 
 api = Blueprint("api", __name__, url_prefix="/api")
+TOKEN_PATTERN = re.compile(r"^[A-Z2-9]{12}$")
+CODE_PATTERN = re.compile(r"^[A-Z2-9]{4}-?[A-Z2-9]{4}-?[A-Z2-9]{4}$")
+
+
+def _json(payload, status=200, no_store=True):
+    response = jsonify(payload)
+    response.status_code = status
+    if no_store:
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Pragma"] = "no-cache"
+    return response
+
+
+def _valid_token(token):
+    return bool(TOKEN_PATTERN.fullmatch((token or "").upper()))
 
 
 def _share_data(share, include_text=True):
@@ -37,7 +53,10 @@ def upload():
         return jsonify(error="The upload is too large."), 413
     expires_in = request.form.get("expires_in", current_app.config["DEFAULT_EXPIRATION_SECONDS"])
     delete_after = request.form.get("delete_after_download", "false").lower() == "true"
-    share, delete_secret = create_share("file", expires_in, delete_after)
+    try:
+        share, delete_secret = create_share("file", expires_in, delete_after)
+    except ValueError:
+        return _json({"error": "Invalid expires_in value."}, 400)
     storage = current_app.extensions["storage"]
     try:
         for incoming in files:
@@ -55,10 +74,14 @@ def upload():
     except Exception as exc:
         db.session.rollback()
         current_app.logger.exception("Upload failed")
-        return jsonify(error=str(exc) if isinstance(exc, ValueError) else "Something went wrong while creating the share."), 400 if isinstance(exc, ValueError) else 500
+        return _json(
+            {"error": "One or more files violate upload limits." if isinstance(exc, ValueError)
+             else "Something went wrong while creating the share."},
+            400 if isinstance(exc, ValueError) else 500
+        )
     payload = _share_data(share, include_text=False)
     payload.update(success=True, delete_secret=delete_secret)
-    return jsonify(payload), 201
+    return _json(payload, 201)
 
 
 @api.post("/text")
@@ -70,28 +93,40 @@ def text_share():
         return jsonify(error="Paste some text to share."), 400
     if len(content.encode("utf-8")) > current_app.config["MAX_TEXT_SIZE_MB"] * 1024 * 1024:
         return jsonify(error=f"Text exceeds the {current_app.config['MAX_TEXT_SIZE_MB']} MB limit."), 413
-    share, delete_secret = create_share("text", data.get("expires_in", current_app.config["DEFAULT_EXPIRATION_SECONDS"]),
-                                        bool(data.get("delete_after_download")), content)
+    try:
+        share, delete_secret = create_share("text", data.get("expires_in", current_app.config["DEFAULT_EXPIRATION_SECONDS"]),
+                                            bool(data.get("delete_after_download")), content)
+    except ValueError:
+        return _json({"error": "Invalid expires_in value."}, 400)
     db.session.commit()
     payload = _share_data(share)
     payload.update(success=True, delete_secret=delete_secret)
-    return jsonify(payload), 201
+    return _json(payload, 201)
 
 
 @api.get("/share/<token>")
+@limiter.limit("60 per hour")
 def get_share(token):
+    if not _valid_token(token):
+        return _json({"error": "Invalid share token."}, 404)
     try:
-        return jsonify(_share_data(get_active_share(token)))
+        return _json(_share_data(get_active_share(token)))
     except ShareUnavailable as exc:
-        return jsonify(error=str(exc), expired="expired" in str(exc).lower()), 410
+        is_expired = "expired" in str(exc).lower()
+        return _json({"error": "This share has expired." if is_expired else "This share is no longer available.",
+                      "expired": is_expired}, 410)
 
 
 @api.get("/qr/<token>")
+@limiter.limit("60 per hour")
 def qr(token):
+    if not _valid_token(token):
+        return _json({"error": "Invalid share token."}, 404)
     try:
         get_active_share(token)
     except ShareUnavailable as exc:
-        return jsonify(error=str(exc)), 410
+        is_expired = "expired" in str(exc).lower()
+        return _json({"error": "This share has expired." if is_expired else "This share is no longer available."}, 410)
     import qrcode
     import qrcode.image.svg
     frontend_url = current_app.config.get("PUBLIC_FRONTEND_URL", "").rstrip("/")
@@ -99,35 +134,45 @@ def qr(token):
     image = qrcode.make(f"{base_url}/s/{token.upper()}", image_factory=qrcode.image.svg.SvgPathImage)
     output = __import__('io').BytesIO()
     image.save(output)
-    return Response(output.getvalue(), mimetype="image/svg+xml")
+    response = Response(output.getvalue(), mimetype="image/svg+xml")
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @api.get("/lookup/<code>")
 @limiter.limit("30 per hour")
 def lookup(code):
+    if not CODE_PATTERN.fullmatch((code or "").upper()):
+        return _json({"error": "Invalid or expired share code."}, 404)
     normalized = code.replace("-", "").upper()
     try:
         share = get_active_share(normalized)
         frontend_url = current_app.config.get("PUBLIC_FRONTEND_URL", "").rstrip("/")
         share_url = f"{frontend_url}/s/{share.token}" if frontend_url else f"/s/{share.token}"
-        return jsonify(token=share.token, url=share_url)
+        return _json({"token": share.token, "url": share_url})
     except ShareUnavailable:
-        return jsonify(error="Invalid or expired share code."), 404
+        return _json({"error": "Invalid or expired share code."}, 404)
 
 
-@api.get("/download/<token>/<int:file_id>")
+@api.route("/download/<token>/<int:file_id>", methods=["GET", "POST"])
 @limiter.limit("60 per hour")
 def download(token, file_id):
+    if not _valid_token(token):
+        return _json({"error": "Invalid share token."}, 404)
     try:
         share = get_active_share(token)
     except ShareUnavailable as exc:
-        return jsonify(error=str(exc)), 410
+        is_expired = "expired" in str(exc).lower()
+        return _json({"error": "This share has expired." if is_expired else "This share is no longer available."}, 410)
+    if request.method == "GET" and share.delete_after_download:
+        return _json({"error": "Use POST for one-time downloads."}, 405)
     file = next((f for f in share.files if f.id == file_id), None)
     if not file:
-        return jsonify(error="File not found."), 404
+        return _json({"error": "File not found."}, 404)
     try:
         handle = current_app.extensions["storage"].open(file.blob_name)
         response = send_file(handle, mimetype=file.content_type, as_attachment=True, download_name=file.original_filename)
+        response.headers["Cache-Control"] = "no-store"
         share.download_count += 1
         if share.delete_after_download:
             # An open local file handle remains readable for this response; cleanup runs immediately.
@@ -137,33 +182,42 @@ def download(token, file_id):
         return response
     except Exception:
         current_app.logger.exception("Download failed")
-        return jsonify(error="The file could not be downloaded."), 500
+        return _json({"error": "The file could not be downloaded."}, 500)
 
 
 @api.post("/consume/<token>")
+@limiter.limit("60 per hour")
 def consume_text(token):
+    if not _valid_token(token):
+        return _json({"error": "Invalid share token."}, 404)
     try:
         share = get_active_share(token)
     except ShareUnavailable as exc:
-        return jsonify(error=str(exc)), 410
+        is_expired = "expired" in str(exc).lower()
+        return _json({"error": "This share has expired." if is_expired else "This share is no longer available."}, 410)
     if share.share_type != "text":
-        return jsonify(error="This endpoint only handles text shares."), 400
+        return _json({"error": "This endpoint only handles text shares."}, 400)
     share.download_count += 1
     if share.delete_after_download:
         remove_share(share, current_app.extensions["storage"])
     else:
         db.session.commit()
-    return jsonify(success=True)
+    return _json({"success": True})
 
 
 @api.delete("/share/<token>")
+@limiter.limit("20 per hour")
 def delete_share(token):
+    if not _valid_token(token):
+        return _json({"error": "Invalid share token."}, 404)
     supplied = request.headers.get("X-Delete-Secret", "")
     try:
         share = get_active_share(token)
     except ShareUnavailable as exc:
-        return jsonify(error=str(exc)), 410
-    if not supplied or hashlib.sha256(supplied.encode()).hexdigest() != share.delete_secret_hash:
-        return jsonify(error="Not authorized to delete this share."), 403
+        is_expired = "expired" in str(exc).lower()
+        return _json({"error": "This share has expired." if is_expired else "This share is no longer available."}, 410)
+    digest = hashlib.sha256(supplied.encode()).hexdigest() if supplied else ""
+    if not supplied or not hmac.compare_digest(digest, share.delete_secret_hash):
+        return _json({"error": "Not authorized to delete this share."}, 403)
     remove_share(share, current_app.extensions["storage"])
-    return jsonify(success=True)
+    return _json({"success": True})

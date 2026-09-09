@@ -23,6 +23,18 @@ def test_file_upload_download_and_filename_safety(client):
     download = client.get(file['download_url'])
     assert download.status_code == 200 and download.data == b'contents'
 
+def test_one_time_file_share_requires_post_download(client):
+    response = client.post(
+        '/api/upload',
+        data={'files': (io.BytesIO(b'contents'), 'once.txt'), 'delete_after_download': 'true'},
+        content_type='multipart/form-data'
+    )
+    assert response.status_code == 201
+    file = response.json['files'][0]
+    assert client.get(file['download_url']).status_code == 405
+    assert client.post(file['download_url']).status_code == 200
+    assert client.get('/api/share/' + response.json['token']).status_code == 410
+
 def test_expired_share_rejected(client, app):
     created = client.post('/api/text', json={'content':'bye'}).json
     with app.app_context():

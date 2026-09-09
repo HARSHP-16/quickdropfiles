@@ -1,6 +1,6 @@
 const fileForm=document.querySelector('#file-form'), textForm=document.querySelector('#text-form'), filesInput=document.querySelector('#files'), dropzone=document.querySelector('#dropzone'), list=document.querySelector('#file-list'), error=document.querySelector('#error');
 let chosen=[];
-function renderFiles(){list.innerHTML=chosen.map(f=>`<li><span>${f.name}</span><span>${formatBytes(f.size)}</span></li>`).join('')}
+function renderFiles(){list.innerHTML='';chosen.forEach(f=>{const item=document.createElement('li');const name=document.createElement('span');const size=document.createElement('span');name.textContent=f.name;size.textContent=formatBytes(f.size);item.append(name,size);list.append(item)})}
 function pick(files){chosen=[...files].slice(0,5);renderFiles()}
 dropzone.addEventListener('click',()=>filesInput.click());filesInput.addEventListener('change',e=>pick(e.target.files));['dragenter','dragover'].forEach(n=>dropzone.addEventListener(n,e=>{e.preventDefault();dropzone.classList.add('drag')}));['dragleave','drop'].forEach(n=>dropzone.addEventListener(n,e=>{e.preventDefault();dropzone.classList.remove('drag')}));dropzone.addEventListener('drop',e=>pick(e.dataTransfer.files));
 document.querySelectorAll('.tab').forEach(tab=>tab.addEventListener('click',()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));tab.classList.add('active');fileForm.classList.toggle('hidden',tab.dataset.mode!=='files');textForm.classList.toggle('hidden',tab.dataset.mode!=='text');error.textContent=''}));

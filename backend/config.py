@@ -5,7 +5,7 @@ from pathlib import Path
 
 class Config:
     BASE_DIR = Path(__file__).resolve().parent.parent
-    SECRET_KEY = os.getenv("SECRET_KEY", "dev-only-change-me")
+    SECRET_KEY = os.getenv("SECRET_KEY")
     SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'data' / 'quickdrop.db'}")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     MAX_FILE_SIZE_MB = int(os.getenv("MAX_FILE_SIZE_MB", "100"))

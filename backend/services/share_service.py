@@ -10,7 +10,11 @@ class ShareUnavailable(Exception):
 
 
 def create_share(share_type, expires_in, delete_after_download=False, text_content=None):
-    seconds = min(max(int(expires_in), 60), int(__import__('flask').current_app.config["MAX_EXPIRATION_SECONDS"]))
+    try:
+        requested_seconds = int(expires_in)
+    except (TypeError, ValueError):
+        raise ValueError("expires_in must be a valid integer.")
+    seconds = min(max(requested_seconds, 60), int(__import__('flask').current_app.config["MAX_EXPIRATION_SECONDS"]))
     while True:
         token = generate_token()
         if not Share.query.filter_by(token=token).first():
