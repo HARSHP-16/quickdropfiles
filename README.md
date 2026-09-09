@@ -1,50 +1,69 @@
-# QuickDrop
+<h1 align = "center"># QuickDropFiles</h1>
 
-Temporary, account-free sharing for files and text. Drop or paste content, then open the generated link, scan its QR code, or enter its short code on another device. Content expires automatically after one hour by default.
+<p align="center">
+  <strong>Fast, temporary, account-free file and text sharing.</strong>
+</p>
 
-## What is implemented
+<p align="center">
+  Share files or text between devices using a short code, share link, or QR code.
+</p>
 
-- Multiple file uploads (default: up to five, 100 MB each) and text shares
-- Cryptographically random 60-bit public tokens and formatted access codes
-- Share links, server-generated QR SVGs, mobile-responsive UI, and expiry countdowns
-- Download/copy counters; optional delete after first successful download/copy
-- Expiration validated on every request, plus an Azure Functions timer cleanup app
-- Local storage + SQLite for development; Azure Blob Storage and PostgreSQL-compatible configuration for production
-- IP rate limiting, request/text/file limits, sanitised display filenames, internal object names, and protected explicit deletion
+<p align="center">
+  <a href="https://quickdropfiles.vercel.app">Live Demo</a>
+  ·
+  <a href="https://github.com/HARSHP-16/quick-drop">Source Code</a>
+</p>
 
-## Run locally
+---
 
-```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt pytest
-flask --app backend.app run --debug
-```
+## Overview
 
-Open `http://127.0.0.1:5000`. Copy `.env.example` to `.env` and set environment values for non-default settings. Run tests with `pytest -q`.
+QuickDropFiles is a temporary, account-free file and text sharing platform designed for quickly transferring content between devices.
 
-## Architecture
+Users can upload files or paste text, create a temporary share, and access it from another device using:
+
+- A shareable link
+- A short share code
+- A QR code
+
+No account or login is required.
+
+Shares automatically expire after a configurable period, with a default expiration time of **1 hour**.
+
+### Live Application
+
+**https://quickdropfiles.vercel.app**
+
+---
+
+## Features
+
+### File Sharing
+
+- Upload multiple files in a single share
+- Drag-and-drop file selection
+- Maximum 5 files per share by default
+- Maximum 100 MB per file by default
+- Download files directly from the share page
+- Original filenames are preserved for display
+- Internal storage objects use generated names rather than public filenames
+
+### Text Sharing
+
+- Paste text directly into QuickDrop
+- Create a temporary text share
+- Copy shared text from another device
+- Text content is automatically removed when the share expires
+
+### Share Access
+
+Each share can be accessed using:
+
+- Share URL
+- Short formatted code
+- QR code
+
+Example:
 
 ```text
-Browser → Flask / Azure App Service → PostgreSQL (share metadata)
-                                  └→ Azure Blob Storage (files)
-Azure Function (every 5 minutes) → deletes expired blobs and metadata state
-```
-
-For local development, SQLite and `data/uploads` replace the cloud services. Do not use SQLite/local storage for production.
-
-## Azure deployment
-
-1. Create an Azure Storage account/container and Azure Database for PostgreSQL.
-2. Deploy the Flask app to App Service (Dockerfile is included) and configure `DATABASE_URL`, `STORAGE_BACKEND=azure`, Azure storage variables, `SECRET_KEY`, and limits through App Service Configuration.
-3. Deploy `functions/cleanup` as a separate Function App with the same database/storage configuration.
-4. Use managed identity/RBAC for Blob access where your hosting setup permits it; never commit credentials. Enable HTTPS-only on App Service.
-
-The Azure Blob adapter uses `DefaultAzureCredential`: Azure CLI/developer credentials work locally, while App Service uses its system-assigned managed identity. Set only the non-secret Azure storage account and container names in App Service configuration.
-
-## API
-
-`POST /api/upload`, `POST /api/text`, `GET /api/share/<token>`, `GET /api/download/<token>/<file_id>`, `GET /api/lookup/<code>`, and `DELETE /api/share/<token>` (requires the creation-only `X-Delete-Secret`). See [docs/api.md](docs/api.md).
-
-## Limits and roadmap
-
-The app deliberately has short, configurable limits to control anonymous-storage abuse and Azure cost. It does not provide accounts, permanent storage, or P2P transfers. WebRTC direct transfers are planned for V2.
+https://quickdropfiles.vercel.app
