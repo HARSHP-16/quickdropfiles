@@ -1,4 +1,5 @@
 import logging
+import secrets
 from pathlib import Path
 from flask import Flask, jsonify
 from werkzeug.exceptions import RequestEntityTooLarge
@@ -14,6 +15,9 @@ def create_app(test_config=None):
     app.config.from_object(Config)
     app.config["FRONTEND_DIR"] = Path(__file__).resolve().parent.parent / "frontend"
     if test_config: app.config.update(test_config)
+    if not app.config.get("SECRET_KEY"):
+        app.config["SECRET_KEY"] = secrets.token_urlsafe(64)
+        app.logger.warning("SECRET_KEY is not configured; using an ephemeral key for this process.")
     app.config["MAX_CONTENT_LENGTH"] = app.config["MAX_FILE_SIZE_MB"] * 1024 * 1024 * app.config["MAX_FILES_PER_SHARE"] + 1024 * 1024
     Path(app.config["UPLOAD_FOLDER"]).mkdir(parents=True, exist_ok=True)
     db.init_app(app)
@@ -33,6 +37,15 @@ def create_app(test_config=None):
 
     @app.errorhandler(429)
     def rate_limited(_): return jsonify(error="Too many requests. Please try again later."), 429
+
+    @app.after_request
+    def security_headers(response):
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        response.headers.setdefault("X-Robots-Tag", "noindex, nofollow, noarchive")
+        return response
     return app
 
 
