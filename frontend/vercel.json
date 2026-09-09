@@ -2,16 +2,8 @@
   "cleanUrls": true,
   "rewrites": [
     {
-      "source": "/open",
-      "destination": "/open.html"
-    },
-    {
-      "source": "/expired",
-      "destination": "/expired.html"
-    },
-    {
-      "source": "/s/:token*",
-      "destination": "/share.html"
+      "source": "/s/(.*)",
+      "destination": "/share"
     }
   ]
 }
