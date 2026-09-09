@@ -1,0 +1,12 @@
+# robots.txt for QuickDrop
+User-agent: *
+Allow: /
+Allow: /open
+Allow: /expired
+Allow: /s/
+
+# Disallow crawler access to backend API routes
+Disallow: /api/
+
+# Production sitemap
+Sitemap: https://quickdropfiles.vercel.app/sitemap.xml

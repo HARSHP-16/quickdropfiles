@@ -1,1 +1,54 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Open a QuickDrop code</title><link rel="stylesheet" href="/css/style.css"></head><body><div class="shell"><nav class="nav"><a class="brand" href="/">QUICK<span>DROP</span></a></nav><main><section class="panel share-card center"><div class="eyebrow">Have a code?</div><h1>Open a share</h1><p class="note">Enter the 12-character code shown on the other device.</p><form id="form"><input id="code" placeholder="ABCD-EFGH-IJKL" autocomplete="off" aria-label="Share code"><p><button class="button">Open share →</button></p><p id="error" class="error"></p></form></section></main></div><script src="/js/config.js"></script><script>document.querySelector('#form').onsubmit=async e=>{e.preventDefault();let r=await fetch(`${API_BASE_URL}/api/lookup/`+encodeURIComponent(document.querySelector('#code').value.trim()));let d=await r.json();if(r.ok)location.href=d.url;else document.querySelector('#error').textContent=d.error}</script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Open a Share Code – QuickDrop</title>
+  <meta name="description" content="Enter a 12-character QuickDrop share code to access shared files or text across your devices securely.">
+  <link rel="canonical" href="https://quickdropfiles.vercel.app/open">
+  <meta name="robots" content="index, follow">
+
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://quickdropfiles.vercel.app/open">
+  <meta property="og:title" content="Open a Share Code – QuickDrop">
+  <meta property="og:description" content="Enter a 12-character QuickDrop share code to access shared files or text across your devices securely.">
+  <meta property="og:site_name" content="QuickDrop">
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Open a Share Code – QuickDrop">
+  <meta name="twitter:description" content="Enter a 12-character QuickDrop share code to access shared files or text across your devices securely.">
+
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="shell">
+    <nav class="nav">
+      <a class="brand" href="/">QUICK<span>DROP</span></a>
+    </nav>
+    <main>
+      <section class="panel share-card center">
+        <div class="eyebrow">Have a code?</div>
+        <h1>Open a share</h1>
+        <p class="note">Enter the 12-character code shown on the other device.</p>
+        <form id="form">
+          <input id="code" placeholder="ABCD-EFGH-IJKL" autocomplete="off" aria-label="Share code">
+          <p><button class="button">Open share →</button></p>
+          <p id="error" class="error"></p>
+        </form>
+      </section>
+    </main>
+  </div>
+  <script src="/js/config.js"></script>
+  <script>
+    document.querySelector('#form').onsubmit = async e => {
+      e.preventDefault();
+      let r = await fetch(`${API_BASE_URL}/api/lookup/` + encodeURIComponent(document.querySelector('#code').value.trim()));
+      let d = await r.json();
+      if (r.ok) location.href = d.url;
+      else document.querySelector('#error').textContent = d.error;
+    };
+  </script>
+</body>
+</html>
