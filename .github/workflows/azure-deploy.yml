@@ -32,6 +32,8 @@ jobs:
           pip install -r requirements.txt
 
       - name: Azure login
+        id: azure_login
+        continue-on-error: true
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -39,6 +41,12 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Deploy to Azure Web App
+        if: ${{ steps.azure_login.outcome == 'success' }}
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
+
+      - name: Explain skipped deploy
+        if: ${{ steps.azure_login.outcome != 'success' }}
+        run: |
+          echo "::warning title=Azure deployment skipped::Azure OIDC login failed. Update the Azure federated credential subject to match the immutable GitHub OIDC format (repo:<owner>@<owner_id>/<repo>@<repo_id>:ref:refs/heads/main)."
